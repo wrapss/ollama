@@ -1,0 +1,51 @@
+name: Sync Fork
+
+on:
+  schedule:
+    - cron: '0 0 * * *'  # Exécution quotidienne à minuit
+  workflow_dispatch:  # Permet l'exécution manuelle
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: Configure Git
+      run: |
+        git config user.name github-actions
+        git config user.email github-actions@github.com
+
+    - name: Add original repo as remote
+      run: |
+        git remote add upstream https://github.com/ORIGINAL_OWNER/ORIGINAL_REPO.git
+
+    - name: Fetch upstream changes
+      run: |
+        git fetch upstream
+
+    - name: Check for changes
+      id: check_changes
+      run: |
+        git diff --quiet upstream/main main || echo "changes=true" >> $GITHUB_OUTPUT
+
+    - name: Update branch
+      if: steps.check_changes.outputs.changes == 'true'
+      run: |
+        git checkout -B sync-fork
+        git merge upstream/main
+        git push -f origin sync-fork
+
+    - name: Create or Update Pull Request
+      if: steps.check_changes.outputs.changes == 'true'
+      uses: peter-evans/create-pull-request@v3
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        branch: sync-fork
+        title: 'Sync fork with upstream repository'
+        body: 'This PR syncs changes from the upstream repository. Please review and merge.'
+        commit-message: 'Sync fork with upstream repository'
