@@ -83,6 +83,7 @@ type ChatCompletionChunk struct {
 	Model             string        `json:"model"`
 	SystemFingerprint string        `json:"system_fingerprint"`
 	Choices           []ChunkChoice `json:"choices"`
+	Usage             *Usage        `json:"usage,omitempty"`
 }
 
 func NewError(code int, message string) ErrorResponse {
@@ -126,7 +127,7 @@ func toChatCompletion(id string, r api.ChatResponse) ChatCompletion {
 }
 
 func toChunk(id string, r api.ChatResponse) ChatCompletionChunk {
-	return ChatCompletionChunk{
+	chunk := ChatCompletionChunk{
 		Id:                id,
 		Object:            "chat.completion.chunk",
 		Created:           time.Now().Unix(),
@@ -143,6 +144,17 @@ func toChunk(id string, r api.ChatResponse) ChatCompletionChunk {
 			}(r.DoneReason),
 		}},
 	}
+
+	// Condition pour ajouter `Usage` seulement si `doneReason` est défini
+	if r.DoneReason != "" {
+		chunk.Usage = &Usage{
+			PromptTokens:     r.PromptEvalCount,
+			CompletionTokens: r.EvalCount,
+			TotalTokens:      r.PromptEvalCount + r.EvalCount,
+		}
+	}
+
+	return chunk
 }
 
 func fromRequest(r ChatCompletionRequest) api.ChatRequest {
