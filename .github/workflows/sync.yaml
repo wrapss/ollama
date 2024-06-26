@@ -31,13 +31,12 @@ jobs:
     - name: Check for changes
       id: check_changes
       run: |
-        git diff --quiet upstream/main main || echo "changes=true" >> $GITHUB_OUTPUT
+        git diff --quiet upstream/main origin/main || echo "changes=true" >> $GITHUB_OUTPUT
 
-    - name: Update branch
+    - name: Update sync branch
       if: steps.check_changes.outputs.changes == 'true'
       run: |
-        git checkout -B sync-fork
-        git merge upstream/main
+        git checkout -B sync-fork upstream/main
         git push -f origin sync-fork
 
     - name: Create or Update Pull Request
@@ -45,6 +44,7 @@ jobs:
       uses: peter-evans/create-pull-request@v3
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
+        base: main  # Assurez-vous que c'est bien le nom de votre branche principale
         branch: sync-fork
         title: 'Sync fork with upstream repository'
         body: 'This PR syncs changes from the upstream repository. Please review and merge.'
