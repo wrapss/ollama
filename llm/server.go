@@ -82,7 +82,7 @@ func LoadModel(model string, maxArraySize int) (*GGML, error) {
 
 // NewLlamaServer will run a server for the given GPUs
 // The gpu list must be a single family.
-func NewLlamaServer(gpus gpu.GpuInfoList, model string, ggml *GGML, adapters, projectors []string, opts api.Options) (LlamaServer, error) {
+func NewLlamaServer(gpus gpu.GpuInfoList, model string, ggml *GGML, adapters, projectors []string, opts api.Options, numParallel int) (LlamaServer, error) {
 	var err error
 	var cpuRunner string
 	var estimate MemoryEstimate
@@ -131,7 +131,20 @@ func NewLlamaServer(gpus gpu.GpuInfoList, model string, ggml *GGML, adapters, pr
 		return nil, errors.New("ollama supports only one lora adapter, but multiple were provided")
 	}
 
-	availableServers := availableServers()
+	availableServers := getAvailableServers()
+	if len(availableServers) == 0 {
+		if runtime.GOOS != "windows" {
+			slog.Warn("llama server binary disappeared, reinitializing payloads")
+			err = Init()
+			if err != nil {
+				slog.Warn("failed to reinitialize payloads", "error", err)
+				return nil, err
+			}
+			availableServers = getAvailableServers()
+		} else {
+			return nil, finalErr
+		}
+	}
 	var servers []string
 	if cpuRunner != "" {
 		servers = []string{cpuRunner}
@@ -208,7 +221,8 @@ func NewLlamaServer(gpus gpu.GpuInfoList, model string, ggml *GGML, adapters, pr
 		if g.Library == "metal" &&
 			uint64(opts.NumGPU) > 0 &&
 			uint64(opts.NumGPU) < ggml.KV().BlockCount()+1 {
-			opts.UseMMap = api.TriStateFalse
+			opts.UseMMap = new(bool)
+			*opts.UseMMap = false
 		}
 	}
 
@@ -218,9 +232,11 @@ func NewLlamaServer(gpus gpu.GpuInfoList, model string, ggml *GGML, adapters, pr
 
 	// Windows CUDA should not use mmap for best performance
 	// Linux  with a model larger than free space, mmap leads to thrashing
-	if (runtime.GOOS == "windows" && gpus[0].Library == "cuda" && opts.UseMMap == api.TriStateUndefined) ||
-		(runtime.GOOS == "linux" && systemFreeMemory < estimate.TotalSize && opts.UseMMap == api.TriStateUndefined) ||
-		opts.UseMMap == api.TriStateFalse {
+	// For CPU loads we want the memory to be allocated, not FS cache
+	if (runtime.GOOS == "windows" && gpus[0].Library == "cuda" && opts.UseMMap == nil) ||
+		(runtime.GOOS == "linux" && systemFreeMemory < estimate.TotalSize && opts.UseMMap == nil) ||
+		(gpus[0].Library == "cpu" && opts.UseMMap == nil) ||
+		(opts.UseMMap != nil && !*opts.UseMMap) {
 		params = append(params, "--no-mmap")
 	}
 
@@ -230,15 +246,6 @@ func NewLlamaServer(gpus gpu.GpuInfoList, model string, ggml *GGML, adapters, pr
 
 	if opts.UseNUMA {
 		params = append(params, "--numa")
-	}
-
-	numParallel := envconfig.NumParallel
-
-	// TODO (jmorganca): multimodal models don't support parallel yet
-	// see https://github.com/ollama/ollama/issues/4165
-	if len(projectors) > 0 {
-		numParallel = 1
-		slog.Warn("multimodal models don't support parallel requests yet")
 	}
 
 	params = append(params, "--parallel", fmt.Sprintf("%d", numParallel))
@@ -567,6 +574,9 @@ func (s *llmServer) WaitUntilRunning(ctx context.Context) error {
 			if s.status != nil && s.status.LastErrMsg != "" {
 				msg = s.status.LastErrMsg
 			}
+			if strings.Contains(msg, "unknown model") {
+				return fmt.Errorf("this model is not supported by your version of Ollama. You may need to upgrade")
+			}
 			return fmt.Errorf("llama runner process has terminated: %v %s", err, msg)
 		default:
 		}
@@ -689,10 +699,9 @@ func (s *llmServer) Completion(ctx context.Context, req CompletionRequest, fn fu
 	}
 	defer s.sem.Release(1)
 
-	// only allow maximum 10 "context shifts" to avoid infinite generation
+	// put an upper limit on num_predict to avoid the model running on forever
 	if req.Options.NumPredict < 0 || req.Options.NumPredict > 10*s.options.NumCtx {
 		req.Options.NumPredict = 10 * s.options.NumCtx
-		slog.Debug("setting token limit to 10x num_ctx", "num_ctx", s.options.NumCtx, "num_predict", req.Options.NumPredict)
 	}
 
 	request := map[string]any{
