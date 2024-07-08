@@ -1217,21 +1217,34 @@ func (s *Server) ProcessHandler(c *gin.Context) {
 			QuantizationLevel: model.Config.FileType,
 		}
 
-		mr := api.ProcessModelResponse{
-			Model:     model.ShortName,
-			Name:      model.ShortName,
-			Size:      int64(v.estimatedTotal),
-			SizeVRAM:  int64(v.estimatedVRAM),
-			Digest:    model.Digest,
-			Details:   modelDetails,
-			ExpiresAt: v.expiresAt,
+		gpuInfos := []api.GPUInfo{}
+		for _, gpu := range v.gpus {
+			usedVRAM := v.llama.EstimatedVRAMByGPU(gpu.ID)
+
+			gpuInfo := api.GPUInfo{
+				Library:   gpu.Library,
+				ID:        gpu.ID,
+				UsedVRAM:  usedVRAM,
+				TotalVRAM: gpu.TotalMemory,
+			}
+			gpuInfos = append(gpuInfos, gpuInfo)
 		}
-		// The scheduler waits to set expiresAt, so if a model is loading it's
-		// possible that it will be set to the unix epoch. For those cases, just
-		// calculate the time w/ the sessionDuration instead.
+
+		mr := api.ProcessModelResponse{
+			Model:    model.ShortName,
+			Name:     model.ShortName,
+			Size:     int64(v.estimatedTotal),
+			SizeVRAM: int64(v.estimatedVRAM),
+			Digest:   model.Digest,
+			Details:  modelDetails,
+			GPUs:     gpuInfos,
+		}
+
 		var epoch time.Time
 		if v.expiresAt == epoch {
 			mr.ExpiresAt = time.Now().Add(v.sessionDuration)
+		} else {
+			mr.ExpiresAt = v.expiresAt
 		}
 
 		models = append(models, mr)

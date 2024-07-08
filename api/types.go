@@ -334,15 +334,26 @@ type ListModelResponse struct {
 	Details    ModelDetails `json:"details,omitempty"`
 }
 
+// GPUInfo provides information about the GPU used by a model.
+
+type GPUInfo struct {
+	Library   string `json:"library"`
+	ID        string `json:"id"`
+	UsedVRAM  uint64 `json:"used_vram"`
+	TotalVRAM uint64 `json:"total_vram"`
+}
+
 // ProcessModelResponse is a single model description in [ProcessResponse].
+
 type ProcessModelResponse struct {
-	Name      string       `json:"name"`
 	Model     string       `json:"model"`
+	Name      string       `json:"name"`
 	Size      int64        `json:"size"`
-	Digest    string       `json:"digest"`
-	Details   ModelDetails `json:"details,omitempty"`
-	ExpiresAt time.Time    `json:"expires_at"`
 	SizeVRAM  int64        `json:"size_vram"`
+	Digest    string       `json:"digest"`
+	Details   ModelDetails `json:"details"`
+	ExpiresAt time.Time    `json:"expires_at"`
+	GPUs      []GPUInfo    `json:"gpus"`
 }
 
 type TokenResponse struct {
