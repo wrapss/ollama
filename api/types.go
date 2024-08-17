@@ -231,7 +231,6 @@ type Options struct {
 
 // Runner options which must be set when the model is loaded into memory
 type Runner struct {
-	UseNUMA   bool  `json:"numa,omitempty"`
 	NumCtx    int   `json:"num_ctx,omitempty"`
 	NumBatch  int   `json:"num_batch,omitempty"`
 	NumGPU    int   `json:"num_gpu,omitempty"`
@@ -516,7 +515,7 @@ func (opts *Options) FromMap(m map[string]interface{}) error {
 	for key, val := range m {
 		opt, ok := jsonOpts[key]
 		if !ok {
-			slog.Warn("invalid option provided", "option", opt.Name)
+			slog.Warn("invalid option provided", "option", key)
 			continue
 		}
 
@@ -626,7 +625,6 @@ func DefaultOptions() Options {
 			F16KV:     true,
 			UseMLock:  false,
 			UseMMap:   nil,
-			UseNUMA:   false,
 		},
 	}
 }

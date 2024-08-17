@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -172,7 +173,7 @@ func (c *Client) stream(ctx context.Context, method, path string, data any, fn f
 		}
 
 		if errorResponse.Error != "" {
-			return fmt.Errorf(errorResponse.Error)
+			return errors.New(errorResponse.Error)
 		}
 
 		if response.StatusCode >= http.StatusBadRequest {
@@ -297,7 +298,7 @@ func (c *Client) List(ctx context.Context) (*ListResponse, error) {
 	return &lr, nil
 }
 
-// List running models.
+// ListRunning lists running models.
 func (c *Client) ListRunning(ctx context.Context) (*ProcessResponse, error) {
 	var lr ProcessResponse
 	if err := c.do(ctx, http.MethodGet, "/api/ps", nil, &lr); err != nil {
@@ -332,7 +333,7 @@ func (c *Client) Show(ctx context.Context, req *ShowRequest) (*ShowResponse, err
 	return &resp, nil
 }
 
-// Hearbeat checks if the server has started and is responsive; if yes, it
+// Heartbeat checks if the server has started and is responsive; if yes, it
 // returns nil, otherwise an error.
 func (c *Client) Heartbeat(ctx context.Context) error {
 	if err := c.do(ctx, http.MethodHead, "/", nil, nil); err != nil {

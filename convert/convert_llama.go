@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/ollama/ollama/llm"
 	"github.com/pdevine/tensor"
 	"github.com/pdevine/tensor/native"
+
+	"github.com/ollama/ollama/llm"
 )
 
 type llama struct {
@@ -87,10 +88,6 @@ func (p *llama) KV(t *Tokenizer) llm.KV {
 	if p.HeadDim > 0 {
 		kv["llama.attention.key_length"] = p.HeadDim
 		kv["llama.attention.value_length"] = p.HeadDim
-	}
-
-	if len(t.Merges) > 0 {
-		kv["tokenizer.ggml.merges"] = t.Merges
 	}
 
 	return kv
