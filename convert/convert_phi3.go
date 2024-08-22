@@ -40,7 +40,6 @@ var _ Converter = (*phi3)(nil)
 func (p *phi3) KV(t *Tokenizer) llm.KV {
 	kv := p.Parameters.KV(t)
 	kv["general.architecture"] = "phi3"
-	kv["general.name"] = "phi3"
 	kv["phi3.context_length"] = p.MaxPositionEmbeddings
 	kv["phi3.embedding_length"] = cmp.Or(p.HiddenSize, p.NEmbd)
 	kv["phi3.feed_forward_length"] = p.IntermediateSize
@@ -74,8 +73,7 @@ func (p *phi3) Tensors(ts []Tensor) []llm.Tensor {
 
 	out := make([]llm.Tensor, 0, len(ts)+2)
 	for _, t := range ts {
-		name := p.tensorName(t.Name())
-		if strings.HasPrefix(name, "blk.0.") {
+		if strings.HasPrefix(t.Name(), "blk.0.") {
 			addRopeFactors.Do(func() {
 				out = append(out, llm.Tensor{
 					Name:     "rope_factors_long.weight",
@@ -92,7 +90,7 @@ func (p *phi3) Tensors(ts []Tensor) []llm.Tensor {
 		}
 
 		out = append(out, llm.Tensor{
-			Name:     name,
+			Name:     t.Name(),
 			Kind:     t.Kind(),
 			Shape:    t.Shape(),
 			WriterTo: t,
@@ -102,8 +100,8 @@ func (p *phi3) Tensors(ts []Tensor) []llm.Tensor {
 	return out
 }
 
-func (p *phi3) tensorName(n string) string {
-	return strings.NewReplacer(
+func (p *phi3) Replacements() []string {
+	return []string{
 		"lm_head", "output",
 		"model.embed_tokens", "token_embd",
 		"model.norm", "output_norm",
@@ -114,7 +112,7 @@ func (p *phi3) tensorName(n string) string {
 		"mlp.down_proj", "ffn_down",
 		"mlp.gate_up_proj", "ffn_up",
 		"post_attention_layernorm", "ffn_norm",
-	).Replace(n)
+	}
 }
 
 type ropeFactor []float32
